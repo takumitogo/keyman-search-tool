@@ -69,6 +69,17 @@
     text-transform:uppercase;
     margin-bottom:7px;
   }
+  .field-section-title{
+    font-size:12px;
+    font-weight:700;
+    color:var(--accent);
+    margin:22px 0 10px;
+    padding-top:14px;
+    border-top:1px solid var(--line);
+  }
+  .field-section-title:first-of-type{
+    margin-top:20px;
+  }
   .field input[type="text"],
   .field select{
     width:100%;
@@ -268,6 +279,13 @@
       <div class="field-hint">部署に含まれる語で絞り込みます</div>
     </div>
 
+    <div class="field-section-title">① 業種から検索</div>
+    <div class="field">
+      <label for="industry-select">業種</label>
+      <select id="industry-select"><option value="">すべて</option></select>
+    </div>
+
+    <div class="field-section-title">② SaaS製品から検索</div>
     <div class="field">
       <label for="large-select">大項目</label>
       <select id="large-select"><option value="">すべて</option></select>
@@ -353,6 +371,7 @@ const SIZE_ORDER = {
 };
 
 const deptInput = document.getElementById('dept-search');
+const industrySelect = document.getElementById('industry-select');
 const largeSelect = document.getElementById('large-select');
 const mediumSelect = document.getElementById('medium-select');
 const productInput = document.getElementById('product-search');
@@ -371,12 +390,19 @@ fetch('keyman_data.json')
   .then(data => {
     ALL = data;
     headerSub.textContent = `${ALL.length.toLocaleString()}件のキーマンデータを検索できます`;
+    buildIndustryOptions();
     buildLargeOptions();
     applyFilters();
   })
   .catch(err => {
     headerSub.textContent = 'データの読み込みに失敗しました（keyman_data.jsonが同じフォルダにあるか確認してください）';
   });
+
+function buildIndustryOptions(){
+  const industries = [...new Set(ALL.map(d => d.industry).filter(Boolean))].sort();
+  industrySelect.innerHTML = '<option value="">すべて</option>' +
+    industries.map(i => `<option value="${escapeAttr(i)}">${escapeHtml(i)}</option>`).join('');
+}
 
 function buildLargeOptions(){
   const larges = [...new Set(ALL.map(d => d.large).filter(Boolean))].sort();
@@ -394,6 +420,7 @@ function buildMediumOptions(){
 
 function applyFilters(){
   const deptKw = deptInput.value.trim();
+  const industry = industrySelect.value;
   const large = largeSelect.value;
   const medium = mediumSelect.value;
   const productKw = productInput.value.trim().toLowerCase();
@@ -401,6 +428,7 @@ function applyFilters(){
 
   filtered = ALL.filter(d => {
     if (deptKw && !(d.dept || '').includes(deptKw)) return false;
+    if (industry && d.industry !== industry) return false;
     if (large && d.large !== large) return false;
     if (medium && d.medium !== medium) return false;
     if (productKw && !(d.product || '').toLowerCase().includes(productKw)) return false;
@@ -470,6 +498,7 @@ function escapeHtml(s){
 function escapeAttr(s){ return escapeHtml(s); }
 
 deptInput.addEventListener('input', debounce(applyFilters, 150));
+industrySelect.addEventListener('change', applyFilters);
 productInput.addEventListener('input', debounce(applyFilters, 150));
 companyInput.addEventListener('input', debounce(applyFilters, 150));
 largeSelect.addEventListener('change', () => { buildMediumOptions(); applyFilters(); });
@@ -478,6 +507,7 @@ prevBtn.addEventListener('click', () => { page--; render(); });
 nextBtn.addEventListener('click', () => { page++; render(); });
 resetBtn.addEventListener('click', () => {
   deptInput.value = '';
+  industrySelect.value = '';
   productInput.value = '';
   companyInput.value = '';
   largeSelect.value = '';
