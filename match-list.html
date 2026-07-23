@@ -184,9 +184,10 @@ let uploadedRows = [];
 let uploadedHeaders = [];
 
 const OUTPUT_LABELS = ['担当者名', '部署', '役職', '利用製品', '出典記事URL', '投稿日'];
+const MAX_PEOPLE_COLS = 10; // 1社あたりの列展開はここまで（超える場合は件数のみ表示）
 
 // アップロードされた会社名リストの中で、最も多くヒットした人数を調べる
-// （これに合わせて「2人目、3人目…」の列ブロック数を決める）
+// （これに合わせて「2人目、3人目…」の列ブロック数を決める。ただしMAX_PEOPLE_COLSが上限）
 function computeMaxHits(companyIdx){
   let max = 1;
   uploadedRows.forEach(row => {
@@ -194,7 +195,7 @@ function computeMaxHits(companyIdx){
     const hits = KEYMAN_INDEX[key] || [];
     if (hits.length > max) max = hits.length;
   });
-  return max;
+  return Math.min(max, MAX_PEOPLE_COLS);
 }
 
 function buildOutputHeaderLabels(maxHits){
@@ -371,7 +372,7 @@ function setupStep3(){
   document.getElementById('auto-note').textContent =
     `現在のリストは ${colLetter(0)}〜${colLetter(existingColCount - 1)} 列（${existingColCount}列）まで使用中です。既存データより手前の列は選択肢に出しません。`
     + (maxHits > 1
-        ? ` このリストは最大${maxHits}人ヒットする会社があるため、${totalNewCols}列（${OUTPUT_LABELS.length}列 × ${maxHits}人）が追加されます。`
+        ? ` このリストは最大${maxHits}人ヒットする会社があるため、${totalNewCols}列（${OUTPUT_LABELS.length}列 × ${maxHits}人）が追加されます（1社あたり最大${MAX_PEOPLE_COLS}人まで。それを超える場合は詳細を省略し件数のみ表示します）。`
         : ` 1社あたり最大1人のヒットなので、${OUTPUT_LABELS.length}列が追加されます。`);
 
   renderOutputPreview();
@@ -434,13 +435,19 @@ document.getElementById('run-btn').addEventListener('click', () => {
     for (let i = 0; i < startIdx; i++) baseRow.push(row[i] || '');
 
     // 1社1行を維持したまま、ヒットした人数分だけ右方向に6列ずつ追加する
+    // ただし10人を超える場合は列を埋めず、件数のみ表示する
     const peopleCells = [];
-    for (let p = 0; p < maxHits; p++){
-      const h = hits[p];
-      if (h){
-        peopleCells.push(h.name || '', h.dept || '', h.title || '', h.product || '', h.url || '', h.date || '');
-      } else {
-        peopleCells.push('', '', '', '', '', '');
+    if (hits.length > MAX_PEOPLE_COLS){
+      for (let p = 0; p < maxHits; p++) peopleCells.push('', '', '', '', '', '');
+      if (peopleCells.length > 0) peopleCells[0] = `${hits.length}名ヒット（詳細は多すぎるため件数のみ表示）`;
+    } else {
+      for (let p = 0; p < maxHits; p++){
+        const h = hits[p];
+        if (h){
+          peopleCells.push(h.name || '', h.dept || '', h.title || '', h.product || '', h.url || '', h.date || '');
+        } else {
+          peopleCells.push('', '', '', '', '', '');
+        }
       }
     }
 
