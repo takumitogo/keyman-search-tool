@@ -80,6 +80,39 @@
   .field-section-title:first-of-type{
     margin-top:20px;
   }
+  .checkbox-list{
+    max-height:220px;
+    overflow-y:auto;
+    border:1px solid var(--line);
+    border-radius:6px;
+    background:var(--bg);
+    padding:6px 8px;
+  }
+  .checkbox-item{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:5px 2px;
+    font-size:13px;
+    cursor:pointer;
+    border-bottom:1px solid var(--line);
+  }
+  .checkbox-item:last-child{
+    border-bottom:none;
+  }
+  .checkbox-item input[type="checkbox"]{
+    flex-shrink:0;
+    cursor:pointer;
+    accent-color:var(--accent);
+  }
+  .checkbox-item span{
+    line-height:1.3;
+  }
+  .checkbox-list-empty{
+    font-size:12px;
+    color:var(--muted);
+    padding:6px 2px;
+  }
   .field input[type="text"],
   .field select{
     width:100%;
@@ -281,19 +314,19 @@
 
     <div class="field-section-title">① 業種から検索</div>
     <div class="field">
-      <label for="industry-select">業種</label>
-      <select id="industry-select"><option value="">すべて</option></select>
+      <label>業種（複数選択可）</label>
+      <div class="checkbox-list" id="industry-checkboxes"></div>
     </div>
 
     <div class="field-section-title">② SaaS製品から検索</div>
     <div class="field">
-      <label for="large-select">大項目</label>
-      <select id="large-select"><option value="">すべて</option></select>
+      <label>大項目（複数選択可）</label>
+      <div class="checkbox-list" id="large-checkboxes"></div>
     </div>
 
     <div class="field">
-      <label for="medium-select">中項目</label>
-      <select id="medium-select"><option value="">すべて</option></select>
+      <label>中項目（複数選択可）</label>
+      <div class="checkbox-list" id="medium-checkboxes"></div>
     </div>
 
     <div class="field">
@@ -371,9 +404,12 @@ const SIZE_ORDER = {
 };
 
 const deptInput = document.getElementById('dept-search');
-const industrySelect = document.getElementById('industry-select');
-const largeSelect = document.getElementById('large-select');
-const mediumSelect = document.getElementById('medium-select');
+const industryBox = document.getElementById('industry-checkboxes');
+const largeBox = document.getElementById('large-checkboxes');
+const mediumBox = document.getElementById('medium-checkboxes');
+const selectedIndustries = new Set();
+const selectedLarges = new Set();
+const selectedMediums = new Set();
 const productInput = document.getElementById('product-search');
 const companyInput = document.getElementById('company-search');
 const resetBtn = document.getElementById('reset-btn');
@@ -392,45 +428,61 @@ fetch('keyman_data.json')
     headerSub.textContent = `${ALL.length.toLocaleString()}件のキーマンデータを検索できます`;
     buildIndustryOptions();
     buildLargeOptions();
+    buildMediumOptions();
     applyFilters();
   })
   .catch(err => {
     headerSub.textContent = 'データの読み込みに失敗しました（keyman_data.jsonが同じフォルダにあるか確認してください）';
   });
 
+function renderCheckboxList(container, values, selectedSet, onChange){
+  if (values.length === 0){
+    container.innerHTML = '<div class="checkbox-list-empty">選択肢がありません</div>';
+    return;
+  }
+  container.innerHTML = values.map(v => `
+    <label class="checkbox-item">
+      <input type="checkbox" value="${escapeAttr(v)}" ${selectedSet.has(v) ? 'checked' : ''}>
+      <span>${escapeHtml(v)}</span>
+    </label>
+  `).join('');
+  container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) selectedSet.add(cb.value);
+      else selectedSet.delete(cb.value);
+      onChange();
+    });
+  });
+}
+
 function buildIndustryOptions(){
   const industries = [...new Set(ALL.map(d => d.industry).filter(Boolean))].sort();
-  industrySelect.innerHTML = '<option value="">すべて</option>' +
-    industries.map(i => `<option value="${escapeAttr(i)}">${escapeHtml(i)}</option>`).join('');
+  renderCheckboxList(industryBox, industries, selectedIndustries, applyFilters);
 }
 
 function buildLargeOptions(){
   const larges = [...new Set(ALL.map(d => d.large).filter(Boolean))].sort();
-  largeSelect.innerHTML = '<option value="">すべて</option>' +
-    larges.map(l => `<option value="${escapeAttr(l)}">${escapeHtml(l)}</option>`).join('');
+  renderCheckboxList(largeBox, larges, selectedLarges, () => { buildMediumOptions(); applyFilters(); });
 }
 
 function buildMediumOptions(){
-  const selectedLarge = largeSelect.value;
-  const pool = selectedLarge ? ALL.filter(d => d.large === selectedLarge) : ALL;
+  const pool = selectedLarges.size ? ALL.filter(d => selectedLarges.has(d.large)) : ALL;
   const mediums = [...new Set(pool.map(d => d.medium).filter(Boolean))].sort();
-  mediumSelect.innerHTML = '<option value="">すべて</option>' +
-    mediums.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join('');
+  // 大項目の選択が変わって存在しなくなった中項目は選択解除する
+  [...selectedMediums].forEach(m => { if (!mediums.includes(m)) selectedMediums.delete(m); });
+  renderCheckboxList(mediumBox, mediums, selectedMediums, applyFilters);
 }
 
 function applyFilters(){
   const deptKw = deptInput.value.trim();
-  const industry = industrySelect.value;
-  const large = largeSelect.value;
-  const medium = mediumSelect.value;
   const productKw = productInput.value.trim().toLowerCase();
   const companyKw = companyInput.value.trim().toLowerCase();
 
   filtered = ALL.filter(d => {
     if (deptKw && !(d.dept || '').includes(deptKw)) return false;
-    if (industry && d.industry !== industry) return false;
-    if (large && d.large !== large) return false;
-    if (medium && d.medium !== medium) return false;
+    if (selectedIndustries.size && !selectedIndustries.has(d.industry)) return false;
+    if (selectedLarges.size && !selectedLarges.has(d.large)) return false;
+    if (selectedMediums.size && !selectedMediums.has(d.medium)) return false;
     if (productKw && !(d.product || '').toLowerCase().includes(productKw)) return false;
     if (companyKw){
       const hay = ((d.company||'') + ' ' + (d.name||'')).toLowerCase();
@@ -498,21 +550,20 @@ function escapeHtml(s){
 function escapeAttr(s){ return escapeHtml(s); }
 
 deptInput.addEventListener('input', debounce(applyFilters, 150));
-industrySelect.addEventListener('change', applyFilters);
 productInput.addEventListener('input', debounce(applyFilters, 150));
 companyInput.addEventListener('input', debounce(applyFilters, 150));
-largeSelect.addEventListener('change', () => { buildMediumOptions(); applyFilters(); });
-mediumSelect.addEventListener('change', applyFilters);
 prevBtn.addEventListener('click', () => { page--; render(); });
 nextBtn.addEventListener('click', () => { page++; render(); });
 resetBtn.addEventListener('click', () => {
   deptInput.value = '';
-  industrySelect.value = '';
   productInput.value = '';
   companyInput.value = '';
-  largeSelect.value = '';
+  selectedIndustries.clear();
+  selectedLarges.clear();
+  selectedMediums.clear();
+  buildIndustryOptions();
+  buildLargeOptions();
   buildMediumOptions();
-  mediumSelect.value = '';
   document.getElementById('sort-select').value = '';
   sortKey = null;
   sortDir = 1;
