@@ -141,14 +141,21 @@
   <div class="step disabled" id="step3">
     <h2><span class="num">3</span>出力を開始する列を選択</h2>
     <p class="desc">
-      「担当者名・部署・役職・利用製品・出典記事URL・投稿日」の6列が、選んだ列から右方向に追加されます。<br>
-      1社で複数人ヒットした場合は行を増やさず、<strong>2人目・3人目…の情報を右側にさらに6列ずつ追加</strong>します（1社1行を維持するため、元のリストへのコピー&amp;ペーストがそのまま行えます）。<br>
+      「ヒット件数」列の後に、「担当者名・部署・役職・出典記事URL・投稿日」の5列が選んだ列から右方向に追加されます（利用製品は一番右にまとめて1列だけ記載します）。<br>
+      1社で複数人ヒットした場合は行を増やさず、<strong>2人目・3人目…の情報を右側にさらに追加</strong>します（1社1行を維持するため、元のリストへのコピー&amp;ペーストがそのまま行えます）。<br>
       既存データが入っている列は選べません（上書き事故を防ぐため）。何も選ばなければ、自動的に空いている列から追加されます。
     </p>
     <div class="field-row">
       <label for="start-col-select">出力開始列</label>
       <select id="start-col-select"></select>
     </div>
+    <div class="field-row">
+      <label for="priority-dept-input">優先表示する部署キーワード</label>
+      <input type="text" id="priority-dept-input" placeholder="例：マーケティング（任意）">
+    </div>
+    <p class="desc" style="margin-left:162px;">
+      1社の担当者が10人を超える場合、ここに入力したキーワードを部署名に含む人を優先的に先頭へ並べ替えてから10人分を表示します。空欄の場合はそのままの順序で先頭10人を表示します。
+    </p>
     <div class="auto-note" id="auto-note"></div>
     <div class="preview-table-wrap" id="output-preview-wrap" style="display:none;">
       <table class="preview" id="output-preview-table"></table>
@@ -183,8 +190,8 @@ let KEYMAN_INDEX = {}; // normalized company name -> [record, ...]
 let uploadedRows = [];
 let uploadedHeaders = [];
 
-const OUTPUT_LABELS = ['担当者名', '部署', '役職', '利用製品', '出典記事URL', '投稿日'];
-const MAX_PEOPLE_COLS = 10; // 1社あたりの列展開はここまで（超える場合は件数のみ表示）
+const PERSON_LABELS = ['担当者名', '部署', '役職', '出典記事URL', '投稿日']; // 利用製品はここに含めず、最後にまとめて記載
+const MAX_PEOPLE_COLS = 10; // 1社あたりの列展開はここまで（超える場合はヒット件数欄に注記のみ）
 
 // アップロードされた会社名リストの中で、最も多くヒットした人数を調べる
 // （これに合わせて「2人目、3人目…」の列ブロック数を決める。ただしMAX_PEOPLE_COLSが上限）
@@ -198,11 +205,13 @@ function computeMaxHits(companyIdx){
   return Math.min(max, MAX_PEOPLE_COLS);
 }
 
+// 新規列の並び: [ヒット件数] [担当者名1 部署1 役職1 出典記事URL1 投稿日1] [同2] ... [利用製品(まとめ)]
 function buildOutputHeaderLabels(maxHits){
-  const labels = [];
+  const labels = ['ヒット件数'];
   for (let p = 1; p <= maxHits; p++){
-    OUTPUT_LABELS.forEach(base => labels.push(`${base}${maxHits > 1 ? p : ''}`));
+    PERSON_LABELS.forEach(base => labels.push(`${base}${maxHits > 1 ? p : ''}`));
   }
+  labels.push('利用製品（まとめ）');
   return labels;
 }
 
@@ -358,7 +367,7 @@ function setupStep3(){
 
   const companyIdx = parseInt(document.getElementById('company-col-select').value, 10);
   const maxHits = computeMaxHits(companyIdx);
-  const totalNewCols = maxHits * OUTPUT_LABELS.length;
+  const totalNewCols = buildOutputHeaderLabels(maxHits).length;
 
   // 選べるのは「既存データの直後」から先のみ（上書き防止のため、それより手前は選択肢に出さない）
   const options = [];
@@ -372,8 +381,8 @@ function setupStep3(){
   document.getElementById('auto-note').textContent =
     `現在のリストは ${colLetter(0)}〜${colLetter(existingColCount - 1)} 列（${existingColCount}列）まで使用中です。既存データより手前の列は選択肢に出しません。`
     + (maxHits > 1
-        ? ` このリストは最大${maxHits}人ヒットする会社があるため、${totalNewCols}列（${OUTPUT_LABELS.length}列 × ${maxHits}人）が追加されます（1社あたり最大${MAX_PEOPLE_COLS}人まで。それを超える場合は詳細を省略し件数のみ表示します）。`
-        : ` 1社あたり最大1人のヒットなので、${OUTPUT_LABELS.length}列が追加されます。`);
+        ? ` このリストは最大${maxHits}人ヒットする会社があるため、${totalNewCols}列が追加されます（1社あたり最大${MAX_PEOPLE_COLS}人まで。それを超える場合は10人分のみ記載し、ヒット件数欄に「11人目以降は割愛」と注記します）。`
+        : ` ${totalNewCols}列が追加されます。`);
 
   renderOutputPreview();
   sel.addEventListener('change', renderOutputPreview);
@@ -411,14 +420,14 @@ let resultHeaders = null;
 document.getElementById('run-btn').addEventListener('click', () => {
   const companyIdx = parseInt(document.getElementById('company-col-select').value, 10);
   const startIdx = parseInt(document.getElementById('start-col-select').value, 10);
-  const existingColCount = uploadedHeaders.length;
+  const priorityKw = document.getElementById('priority-dept-input').value.trim();
   const maxHits = computeMaxHits(companyIdx);
   const labels = buildOutputHeaderLabels(maxHits);
 
-  // 出力用のヘッダーを組み立てる（既存列 + 空白パディング + 新規列(人数分) + ヒット件数）
+  // 出力用のヘッダーを組み立てる（既存列 + 空白パディング + 新規列）
   resultHeaders = [...uploadedHeaders];
   while (resultHeaders.length < startIdx) resultHeaders.push(`(${colLetter(resultHeaders.length)}列)`);
-  resultHeaders.push(...labels, 'ヒット件数');
+  resultHeaders.push(...labels);
 
   resultRows = [];
   let matchedCompanies = 0;
@@ -428,35 +437,47 @@ document.getElementById('run-btn').addEventListener('click', () => {
   uploadedRows.forEach(row => {
     const companyName = row[companyIdx] || '';
     const key = normalizeCompany(companyName);
-    const hits = KEYMAN_INDEX[key] || [];
+    let hits = KEYMAN_INDEX[key] || [];
+
+    // 優先部署キーワードが指定されていれば、該当者を先頭に並べ替える
+    // （10人を超えてヒットする会社で、優先したい部署の人が漏れないようにするため）
+    if (priorityKw && hits.length > 1){
+      const kw = priorityKw.toLowerCase();
+      const priority = hits.filter(h => (h.dept || '').toLowerCase().includes(kw));
+      const rest = hits.filter(h => !(h.dept || '').toLowerCase().includes(kw));
+      hits = [...priority, ...rest];
+    }
 
     // 既存の行データ（列数が足りない場合は空欄で埋める）＋ startIdxまでの空白パディング
     const baseRow = [];
     for (let i = 0; i < startIdx; i++) baseRow.push(row[i] || '');
 
-    // 1社1行を維持したまま、ヒットした人数分だけ右方向に6列ずつ追加する
-    // ただし10人を超える場合は列を埋めず、件数のみ表示する
+    // ヒット件数（新規列の先頭）。10人を超える場合は割愛の旨を注記する
+    const hitCountCell = hits.length > MAX_PEOPLE_COLS
+      ? `${hits.length}名（${MAX_PEOPLE_COLS + 1}人目以降は割愛。全員分が必要な場合は検索ツールで会社名検索の上、別途CSVダウンロードしてください）`
+      : String(hits.length);
+
+    // 1社1行を維持したまま、最大MAX_PEOPLE_COLS人分だけ右方向に列を追加する
     const peopleCells = [];
-    if (hits.length > MAX_PEOPLE_COLS){
-      for (let p = 0; p < maxHits; p++) peopleCells.push('', '', '', '', '', '');
-      if (peopleCells.length > 0) peopleCells[0] = `${hits.length}名ヒット（詳細は多すぎるため件数のみ表示）`;
-    } else {
-      for (let p = 0; p < maxHits; p++){
-        const h = hits[p];
-        if (h){
-          peopleCells.push(h.name || '', h.dept || '', h.title || '', h.product || '', h.url || '', h.date || '');
-        } else {
-          peopleCells.push('', '', '', '', '', '');
-        }
+    for (let p = 0; p < maxHits; p++){
+      const h = hits[p];
+      if (h){
+        peopleCells.push(h.name || '', h.dept || '', h.title || '', h.url || '', h.date || '');
+      } else {
+        peopleCells.push('', '', '', '', '');
       }
     }
+
+    // 利用製品はまとめて1列に（重複除去、表示対象の人数分＝maxHitsまでを対象とする）
+    const products = [...new Set(hits.slice(0, maxHits).map(h => h.product).filter(Boolean))];
+    const productSummary = products.join('、');
 
     if (hits.length > 0){
       matchedCompanies++;
       matchedPeople += hits.length;
     }
 
-    resultRows.push([...baseRow, ...peopleCells, hits.length]);
+    resultRows.push([...baseRow, hitCountCell, ...peopleCells, productSummary]);
   });
 
   document.getElementById('result-box').style.display = 'block';
