@@ -150,11 +150,15 @@
       <select id="start-col-select"></select>
     </div>
     <div class="field-row">
-      <label for="priority-dept-input">優先表示する部署キーワード</label>
-      <input type="text" id="priority-dept-input" placeholder="例：マーケティング（任意）">
+      <label>優先表示する部署キーワード</label>
+      <div style="flex:1; display:flex; gap:8px;">
+        <input type="text" id="priority-dept-input-1" placeholder="例：マーケティング" style="flex:1;">
+        <input type="text" id="priority-dept-input-2" placeholder="例：営業" style="flex:1;">
+        <input type="text" id="priority-dept-input-3" placeholder="例：広報" style="flex:1;">
+      </div>
     </div>
     <p class="desc" style="margin-left:162px;">
-      1社の担当者が10人を超える場合、ここに入力したキーワードを部署名に含む人を優先的に先頭へ並べ替えてから10人分を表示します。空欄の場合はそのままの順序で先頭10人を表示します。
+      1社の担当者が10人を超える場合、ここに入力したキーワード（最大3つ、いずれか）を部署名に含む人を優先的に先頭へ並べ替えてから10人分を表示します。空欄の場合はそのままの順序で先頭10人を表示します。
     </p>
     <div class="auto-note" id="auto-note"></div>
     <div class="preview-table-wrap" id="output-preview-wrap" style="display:none;">
@@ -420,7 +424,11 @@ let resultHeaders = null;
 document.getElementById('run-btn').addEventListener('click', () => {
   const companyIdx = parseInt(document.getElementById('company-col-select').value, 10);
   const startIdx = parseInt(document.getElementById('start-col-select').value, 10);
-  const priorityKw = document.getElementById('priority-dept-input').value.trim();
+  const priorityKeywords = [
+    document.getElementById('priority-dept-input-1').value.trim(),
+    document.getElementById('priority-dept-input-2').value.trim(),
+    document.getElementById('priority-dept-input-3').value.trim(),
+  ].filter(Boolean);
   const maxHits = computeMaxHits(companyIdx);
   const labels = buildOutputHeaderLabels(maxHits);
 
@@ -439,12 +447,13 @@ document.getElementById('run-btn').addEventListener('click', () => {
     const key = normalizeCompany(companyName);
     let hits = KEYMAN_INDEX[key] || [];
 
-    // 優先部署キーワードが指定されていれば、該当者を先頭に並べ替える
+    // 優先部署キーワード（最大3つ）が指定されていれば、いずれかに該当する人を先頭に並べ替える
     // （10人を超えてヒットする会社で、優先したい部署の人が漏れないようにするため）
-    if (priorityKw && hits.length > 1){
-      const kw = priorityKw.toLowerCase();
-      const priority = hits.filter(h => (h.dept || '').toLowerCase().includes(kw));
-      const rest = hits.filter(h => !(h.dept || '').toLowerCase().includes(kw));
+    if (priorityKeywords.length && hits.length > 1){
+      const kws = priorityKeywords.map(k => k.toLowerCase());
+      const matchesAny = h => kws.some(kw => (h.dept || '').toLowerCase().includes(kw));
+      const priority = hits.filter(matchesAny);
+      const rest = hits.filter(h => !matchesAny(h));
       hits = [...priority, ...rest];
     }
 
