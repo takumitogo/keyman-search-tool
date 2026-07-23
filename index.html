@@ -611,7 +611,10 @@ document.getElementById('check-dup-btn').addEventListener('click', () => {
 document.getElementById('csv-btn').addEventListener('click', () => {
   const headers = ['会社名','業種','部署','役職','担当者','従業員規模','投稿日/記事公開日','出典元','出典記事URL','導入SaaS製品','大項目','中項目'];
   const csvRows = [headers.join(',')];
-  filtered.forEach(d => {
+  const sortedForExport = [...filtered].sort((a, b) =>
+    String(a.company || '').localeCompare(String(b.company || ''), 'ja')
+  );
+  sortedForExport.forEach(d => {
     const row = [d.company, d.industry, d.dept, d.title, d.name, d.size, d.date, d.source, d.url, d.product, d.large, d.medium]
       .map(v => `"${String(v || '').replace(/"/g, '""')}"`);
     csvRows.push(row.join(','));
