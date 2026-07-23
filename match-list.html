@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>営業リスト照合ツール</title>
+<style>
+  :root{
+    --bg:#faf9f6;
+    --surface:#ffffff;
+    --ink:#1e2222;
+    --muted:#6b7270;
+    --line:#ddd9d0;
+    --accent:#35524a;
+    --accent-soft:#e6eeea;
+    --warn:#8a4a3a;
+    --warn-soft:#f5e9e5;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI",sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+  }
+  header{
+    padding:28px 32px 20px;
+    border-bottom:1px solid var(--line);
+    background:var(--surface);
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+  }
+  header h1{ margin:0 0 4px; font-size:22px; font-weight:700; }
+  header h1 .mark{
+    display:inline-block; width:9px;height:9px;
+    background:var(--accent); border-radius:2px; margin-right:9px;
+  }
+  header p{ margin:0; font-size:13px; color:var(--muted); }
+  header a{ font-size:13px; color:var(--accent); text-decoration:none; }
+  main{ max-width:820px; margin:0 auto; padding:32px 24px 80px; }
+  .step{
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:10px; padding:22px 24px; margin-bottom:20px;
+  }
+  .step h2{ font-size:15px; margin:0 0 4px; display:flex; align-items:center; gap:8px; }
+  .step h2 .num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:22px;height:22px; background:var(--accent); color:#fff;
+    border-radius:50%; font-size:12px; font-weight:700;
+  }
+  .step .desc{ font-size:12.5px; color:var(--muted); margin:0 0 16px 30px; line-height:1.6; }
+  .step.disabled{ opacity:0.45; pointer-events:none; }
+  .dropzone{
+    border:2px dashed var(--line); border-radius:8px; padding:28px;
+    text-align:center; cursor:pointer; background:var(--bg);
+  }
+  .dropzone:hover{ border-color:var(--accent); }
+  .dropzone.dragover{ border-color:var(--accent); background:var(--accent-soft); }
+  .dropzone p{ margin:0; font-size:13px; color:var(--muted); }
+  .dropzone .filename{ font-weight:700; color:var(--ink); margin-top:6px; }
+  input[type=file]{ display:none; }
+  .field-row{ display:flex; align-items:center; gap:12px; margin-bottom:4px; }
+  .field-row label{ width:150px; font-size:13px; color:var(--muted); flex-shrink:0; }
+  .field-row select{
+    flex:1; padding:8px 10px; border:1px solid var(--line); border-radius:6px;
+    font-size:13.5px; font-family:inherit; background:var(--bg); color:var(--ink);
+  }
+  .field-row select:focus{ outline:none; border-color:var(--accent); }
+  .auto-note{
+    margin:6px 0 14px 162px; font-size:12px; color:var(--accent);
+  }
+  .preview-table-wrap{
+    overflow-x:auto; margin-top:14px; border:1px solid var(--line); border-radius:8px;
+  }
+  table.preview{ border-collapse:collapse; width:100%; font-size:12px; }
+  table.preview th, table.preview td{
+    padding:6px 10px; border-bottom:1px solid var(--line); white-space:nowrap; text-align:left;
+  }
+  table.preview th{ background:var(--bg); color:var(--muted); font-weight:700; }
+  table.preview th.hit{ color:var(--accent); }
+  table.preview th.new-col{ background:var(--accent-soft); color:var(--accent); }
+  #run-btn{
+    width:100%; padding:13px; background:var(--accent); color:#fff;
+    border:none; border-radius:8px; font-size:14.5px; font-weight:700; cursor:pointer;
+  }
+  #run-btn:disabled{ background:var(--line); color:var(--muted); cursor:default; }
+  #run-btn:not(:disabled):hover{ opacity:0.9; }
+  .result-box{ background:var(--accent-soft); border-radius:8px; padding:18px 20px; margin-top:16px; }
+  .result-box .big{ font-size:24px; font-weight:700; }
+  .result-box .sub{ font-size:13px; color:var(--muted); margin-top:4px; }
+  #download-btn{
+    margin-top:14px; padding:11px 20px; background:var(--ink); color:#fff;
+    border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer;
+  }
+  .note{ font-size:12px; color:var(--muted); margin-top:10px; line-height:1.6; }
+  .warning{
+    background:var(--warn-soft); color:var(--warn); border-radius:8px;
+    padding:14px 16px; font-size:13px; margin-bottom:20px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1><span class="mark"></span>営業リスト照合ツール</h1>
+    <p id="header-sub">読み込み中…</p>
+  </div>
+  <a href="index.html">← 検索ツールに戻る</a>
+</header>
+
+<main>
+
+  <div class="warning" id="data-missing-warning" style="display:none;">
+    キーマンデータ（keyman_data.json）が読み込めませんでした。同じフォルダに配置されているか確認してください。
+  </div>
+
+  <div class="step" id="step1">
+    <h2><span class="num">1</span>営業リストをアップロード</h2>
+    <p class="desc">会社名が含まれるCSVファイルを選んでください（列の位置は自由です）</p>
+    <div class="dropzone" id="dropzone">
+      <p>クリックしてファイルを選択、またはドラッグ&amp;ドロップ</p>
+      <div class="filename" id="filename"></div>
+    </div>
+    <input type="file" id="file-input" accept=".csv">
+  </div>
+
+  <div class="step disabled" id="step2">
+    <h2><span class="num">2</span>会社名の列を選択</h2>
+    <p class="desc">アップロードしたリストの、どの列に会社名が入っているか選んでください</p>
+    <div class="field-row">
+      <label for="company-col-select">会社名の列</label>
+      <select id="company-col-select"></select>
+    </div>
+    <div class="preview-table-wrap" id="preview-wrap" style="display:none;">
+      <table class="preview" id="preview-table"></table>
+    </div>
+  </div>
+
+  <div class="step disabled" id="step3">
+    <h2><span class="num">3</span>出力を開始する列を選択</h2>
+    <p class="desc">
+      「担当者名・部署・役職・利用製品・出典記事URL・投稿日」の6列が、選んだ列から右方向に追加されます。<br>
+      既存データが入っている列は選べません（上書き事故を防ぐため）。何も選ばなければ、自動的に空いている列から追加されます。
+    </p>
+    <div class="field-row">
+      <label for="start-col-select">出力開始列</label>
+      <select id="start-col-select"></select>
+    </div>
+    <div class="auto-note" id="auto-note"></div>
+    <div class="preview-table-wrap" id="output-preview-wrap" style="display:none;">
+      <table class="preview" id="output-preview-table"></table>
+    </div>
+  </div>
+
+  <div class="step disabled" id="step4">
+    <h2><span class="num">4</span>照合を実行</h2>
+    <p class="desc">
+      1社で複数人ヒットした場合、その人数分だけ行が増えます（元のリストの他の列はそのままコピーされます）。<br>
+      会社名は表記ゆれ（スペース・全角半角）を吸収した上で完全一致のみ照合します。部分一致はしません。
+    </p>
+    <button id="run-btn" disabled>照合してCSVを作成</button>
+
+    <div class="result-box" id="result-box" style="display:none;">
+      <div class="big" id="result-summary">-</div>
+      <div class="sub" id="result-detail"></div>
+      <button id="download-btn">結果をCSVでダウンロード</button>
+    </div>
+  </div>
+
+  <p class="note">
+    照合には keyman_data.json（インタビュー記事から抽出したキーマン情報）を使用しています。<br>
+    データを更新した場合は、このファイルを差し替えてください。
+  </p>
+
+</main>
+
+<script>
+let KEYMAN = [];
+let KEYMAN_INDEX = {}; // normalized company name -> [record, ...]
+let uploadedRows = [];
+let uploadedHeaders = [];
+
+const OUTPUT_LABELS = ['担当者名', '部署', '役職', '利用製品', '出典記事URL', '投稿日'];
+
+function normalizeCompany(s){
+  return String(s || '')
+    .replace(/[\s　]/g, '')
+    .replace(/[０-９Ａ-Ｚａ-ｚ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .toLowerCase();
+}
+
+// 0始まりの列インデックス → Excel列記号（0→A, 1→B, ... 26→AA）
+function colLetter(idx){
+  let s = '';
+  idx++;
+  while (idx > 0){
+    const rem = (idx - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    idx = Math.floor((idx - 1) / 26);
+  }
+  return s;
+}
+
+fetch('keyman_data.json')
+  .then(r => r.json())
+  .then(data => {
+    KEYMAN = data;
+    KEYMAN_INDEX = {};
+    data.forEach(rec => {
+      const key = normalizeCompany(rec.company);
+      if (!key) return;
+      (KEYMAN_INDEX[key] = KEYMAN_INDEX[key] || []).push(rec);
+    });
+    document.getElementById('header-sub').textContent =
+      `${data.length.toLocaleString()}件のキーマンデータと照合できます`;
+  })
+  .catch(() => {
+    document.getElementById('data-missing-warning').style.display = 'block';
+    document.getElementById('header-sub').textContent = 'データ未読み込み';
+  });
+
+// --- CSVパース（簡易・引用符対応） ---
+function parseCSV(text){
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+  for (let i = 0; i < text.length; i++){
+    const c = text[i];
+    if (inQuotes){
+      if (c === '"'){
+        if (text[i+1] === '"'){ field += '"'; i++; }
+        else { inQuotes = false; }
+      } else {
+        field += c;
+      }
+    } else {
+      if (c === '"'){ inQuotes = true; }
+      else if (c === ','){ row.push(field); field = ''; }
+      else if (c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else if (c === '\r'){ /* skip */ }
+      else { field += c; }
+    }
+  }
+  if (field.length > 0 || row.length > 0){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.length > 1 || (r.length === 1 && r[0] !== ''));
+}
+
+function csvEscape(v){
+  const s = String(v ?? '');
+  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// --- ファイルアップロード ---
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function handleFile(file){
+  document.getElementById('filename').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const parsed = parseCSV(e.target.result);
+    if (parsed.length < 1){ alert('CSVの読み込みに失敗しました'); return; }
+    uploadedHeaders = parsed[0];
+    uploadedRows = parsed.slice(1);
+    setupStep2();
+    setupStep3();
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+// --- ステップ2: 会社名の列（ドロップダウン、実際の列名で選ぶ） ---
+function setupStep2(){
+  document.getElementById('step2').classList.remove('disabled');
+  document.getElementById('step3').classList.remove('disabled');
+  document.getElementById('step4').classList.remove('disabled');
+
+  const sel = document.getElementById('company-col-select');
+  sel.innerHTML = uploadedHeaders.map((h, i) =>
+    `<option value="${i}">${colLetter(i)}列：${escapeHtml(h || '(名称なし)')}</option>`
+  ).join('');
+
+  // 「会社」「企業」等を含む列名があれば初期選択にする
+  const guessIdx = uploadedHeaders.findIndex(h => /会社|企業|法人|得意先|取引先/.test(h || ''));
+  if (guessIdx >= 0) sel.value = guessIdx;
+
+  renderInputPreview();
+  sel.addEventListener('change', renderInputPreview);
+
+  document.getElementById('run-btn').disabled = false;
+}
+
+function renderInputPreview(){
+  const wrap = document.getElementById('preview-wrap');
+  const table = document.getElementById('preview-table');
+  const companyIdx = parseInt(document.getElementById('company-col-select').value, 10);
+
+  const previewRows = uploadedRows.slice(0, 5);
+  let html = '<thead><tr>' + uploadedHeaders.map((h, i) =>
+    `<th class="${i===companyIdx ? 'hit' : ''}">${colLetter(i)}: ${escapeHtml(h || '')}${i===companyIdx ? ' ★' : ''}</th>`
+  ).join('') + '</tr></thead>';
+  html += '<tbody>' + previewRows.map(r =>
+    '<tr>' + uploadedHeaders.map((_, i) => `<td>${escapeHtml(r[i] || '')}</td>`).join('') + '</tr>'
+  ).join('') + '</tbody>';
+
+  table.innerHTML = html;
+  wrap.style.display = 'block';
+}
+
+// --- ステップ3: 出力開始列（ドロップダウン、自動検出をデフォルトに） ---
+function setupStep3(){
+  const sel = document.getElementById('start-col-select');
+  const existingColCount = uploadedHeaders.length;
+  const autoStartIdx = existingColCount; // 既存データの直後（＝空いている最初の列）
+
+  // 選べるのは「既存データの直後」から先のみ（上書き防止のため、それより手前は選択肢に出さない）
+  const options = [];
+  for (let i = autoStartIdx; i < autoStartIdx + 10; i++){
+    const label = i === autoStartIdx ? `${colLetter(i)}列（自動検出：空いている最初の列）` : `${colLetter(i)}列`;
+    options.push(`<option value="${i}">${label}</option>`);
+  }
+  sel.innerHTML = options.join('');
+  sel.value = autoStartIdx;
+
+  document.getElementById('auto-note').textContent =
+    `現在のリストは ${colLetter(0)}〜${colLetter(existingColCount - 1)} 列（${existingColCount}列）まで使用中です。既存データより手前の列は選択肢に出しません。`;
+
+  renderOutputPreview();
+  sel.addEventListener('change', renderOutputPreview);
+}
+
+function renderOutputPreview(){
+  const wrap = document.getElementById('output-preview-wrap');
+  const table = document.getElementById('output-preview-table');
+  const startIdx = parseInt(document.getElementById('start-col-select').value, 10);
+  const existingColCount = uploadedHeaders.length;
+
+  const totalCols = Math.max(startIdx + OUTPUT_LABELS.length, existingColCount);
+  let headerCells = '';
+  for (let i = 0; i < totalCols; i++){
+    if (i < existingColCount){
+      headerCells += `<th>${colLetter(i)}: ${escapeHtml(uploadedHeaders[i] || '')}</th>`;
+    } else if (i >= startIdx && i < startIdx + OUTPUT_LABELS.length){
+      headerCells += `<th class="new-col">${colLetter(i)}: ${OUTPUT_LABELS[i - startIdx]}（新規）</th>`;
+    } else {
+      headerCells += `<th>${colLetter(i)}: （空欄）</th>`;
+    }
+  }
+
+  table.innerHTML = `<thead><tr>${headerCells}</tr></thead>`;
+  wrap.style.display = 'block';
+}
+
+// --- 照合実行 ---
+let resultRows = null;
+let resultHeaders = null;
+
+document.getElementById('run-btn').addEventListener('click', () => {
+  const companyIdx = parseInt(document.getElementById('company-col-select').value, 10);
+  const startIdx = parseInt(document.getElementById('start-col-select').value, 10);
+  const existingColCount = uploadedHeaders.length;
+
+  // 出力用のヘッダーを組み立てる（既存列 + 空白パディング + 新規6列 + ヒット件数）
+  resultHeaders = [...uploadedHeaders];
+  while (resultHeaders.length < startIdx) resultHeaders.push(`(${colLetter(resultHeaders.length)}列)`);
+  resultHeaders.push(...OUTPUT_LABELS, 'ヒット件数');
+
+  resultRows = [];
+  let matchedCompanies = 0;
+  let matchedPeople = 0;
+  const totalCompanies = uploadedRows.length;
+
+  uploadedRows.forEach(row => {
+    const companyName = row[companyIdx] || '';
+    const key = normalizeCompany(companyName);
+    const hits = KEYMAN_INDEX[key] || [];
+
+    // 既存の行データ（列数が足りない場合は空欄で埋める）＋ startIdxまでの空白パディング
+    const baseRow = [];
+    for (let i = 0; i < startIdx; i++) baseRow.push(row[i] || '');
+
+    if (hits.length === 0){
+      resultRows.push([...baseRow, '', '', '', '', '', '', 0]);
+      return;
+    }
+
+    matchedCompanies++;
+    hits.forEach(h => {
+      matchedPeople++;
+      resultRows.push([
+        ...baseRow,
+        h.name || '', h.dept || '', h.title || '', h.product || '', h.url || '', h.date || '',
+        hits.length,
+      ]);
+    });
+  });
+
+  document.getElementById('result-box').style.display = 'block';
+  document.getElementById('result-summary').textContent = `${matchedCompanies.toLocaleString()} / ${totalCompanies.toLocaleString()} 社ヒット`;
+  document.getElementById('result-detail').textContent = `担当者情報：合計 ${matchedPeople.toLocaleString()} 件見つかりました`;
+});
+
+document.getElementById('download-btn').addEventListener('click', () => {
+  if (!resultRows) return;
+  const csvLines = [resultHeaders.map(csvEscape).join(',')];
+  resultRows.forEach(r => csvLines.push(r.map(csvEscape).join(',')));
+  const csvContent = '\uFEFF' + csvLines.join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `営業リスト_照合結果_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>キーマンリサーチ検索</title>
+<style>
+  :root{
+    --bg:#faf9f6;
+    --surface:#ffffff;
+    --ink:#1e2222;
+    --muted:#6b7270;
+    --line:#ddd9d0;
+    --accent:#35524a;
+    --accent-soft:#e6eeea;
+    --accent-soft2:#f0f4f2;
+    --warn:#8a4a3a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI",sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+  }
+  header{
+    padding:28px 32px 20px;
+    border-bottom:1px solid var(--line);
+    background:var(--surface);
+  }
+  header h1{
+    margin:0 0 4px;
+    font-size:22px;
+    font-weight:700;
+    letter-spacing:0.02em;
+  }
+  header h1 .mark{
+    display:inline-block;
+    width:9px;height:9px;
+    background:var(--accent);
+    border-radius:2px;
+    margin-right:9px;
+  }
+  header p{
+    margin:0;
+    font-size:13px;
+    color:var(--muted);
+  }
+  .layout{
+    display:grid;
+    grid-template-columns:280px 1fr;
+    gap:0;
+    min-height:calc(100vh - 82px);
+  }
+  aside{
+    padding:24px 20px;
+    border-right:1px solid var(--line);
+    background:var(--surface);
+  }
+  .field{
+    margin-bottom:20px;
+  }
+  .field label{
+    display:block;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:0.06em;
+    color:var(--muted);
+    text-transform:uppercase;
+    margin-bottom:7px;
+  }
+  .field input[type="text"],
+  .field select{
+    width:100%;
+    padding:9px 10px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-size:14px;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:inherit;
+  }
+  .field input[type="text"]:focus,
+  .field select:focus{
+    outline:none;
+    border-color:var(--accent);
+    background:var(--surface);
+  }
+  .field-hint{
+    font-size:11px;
+    color:var(--muted);
+    margin-top:5px;
+  }
+  #reset-btn{
+    width:100%;
+    padding:9px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--muted);
+    border-radius:6px;
+    font-size:12.5px;
+    cursor:pointer;
+    margin-top:4px;
+  }
+  #reset-btn:hover{
+    border-color:var(--warn);
+    color:var(--warn);
+  }
+  main{
+    padding:24px 32px;
+    overflow-x:auto;
+  }
+  .summary-bar{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .summary-bar .count{
+    font-size:26px;
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+  }
+  .summary-bar .count-label{
+    font-size:13px;
+    color:var(--muted);
+  }
+  #sort-select{
+    padding:8px 10px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-size:13px;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:inherit;
+    margin-left:6px;
+  }
+  #sort-select:focus{
+    outline:none;
+    border-color:var(--accent);
+  }
+  #check-dup-btn{
+    padding:8px 14px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--muted);
+    border-radius:6px;
+    font-size:12.5px;
+    cursor:pointer;
+    margin-left:14px;
+  }
+  #check-dup-btn:hover{
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+  #dup-check-result{
+    font-size:12.5px;
+    color:var(--accent);
+    margin-left:10px;
+  }
+  #csv-btn{
+    padding:8px 16px;
+    border:1px solid var(--accent);
+    background:var(--accent-soft);
+    color:var(--accent);
+    border-radius:6px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  #csv-btn:hover{
+    background:var(--accent);
+    color:#fff;
+  }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    background:var(--surface);
+    font-size:13.5px;
+  }
+  thead th{
+    text-align:left;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    color:var(--muted);
+    padding:9px 12px;
+    border-bottom:2px solid var(--ink);
+    white-space:nowrap;
+    position:sticky;
+    top:0;
+    background:var(--surface);
+  }
+  tbody td{
+    padding:10px 12px;
+    border-bottom:1px solid var(--line);
+    vertical-align:top;
+  }
+  tbody tr:hover{
+    background:var(--accent-soft2);
+  }
+  .tag{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:99px;
+    background:var(--accent-soft);
+    color:var(--accent);
+    font-size:11px;
+    white-space:nowrap;
+  }
+  .cat-path{
+    font-size:11.5px;
+    color:var(--muted);
+    margin-top:3px;
+  }
+  .company-name{
+    font-weight:600;
+  }
+  .empty-state{
+    padding:60px 20px;
+    text-align:center;
+    color:var(--muted);
+  }
+  .pager{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-top:18px;
+    font-size:13px;
+  }
+  .pager button{
+    padding:6px 14px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    border-radius:6px;
+    cursor:pointer;
+    font-size:13px;
+  }
+  .pager button:disabled{
+    opacity:0.35;
+    cursor:default;
+  }
+  .pager button:not(:disabled):hover{
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+  @media (max-width: 860px){
+    .layout{grid-template-columns:1fr;}
+    aside{border-right:none;border-bottom:1px solid var(--line);}
+    main{padding:20px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="mark"></span>キーマンリサーチ検索</h1>
+  <p id="header-sub">読み込み中…</p>
+  <p style="margin-top:8px;"><a href="match-list.html" style="color:var(--accent);font-size:13px;">→ 営業リストと照合する</a></p>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="field">
+      <label for="dept-search">部署キーワード検索</label>
+      <input type="text" id="dept-search" placeholder="例：マーケティング">
+      <div class="field-hint">部署に含まれる語で絞り込みます</div>
+    </div>
+
+    <div class="field">
+      <label for="large-select">大項目</label>
+      <select id="large-select"><option value="">すべて</option></select>
+    </div>
+
+    <div class="field">
+      <label for="medium-select">中項目</label>
+      <select id="medium-select"><option value="">すべて</option></select>
+    </div>
+
+    <div class="field">
+      <label for="product-search">製品名</label>
+      <input type="text" id="product-search" placeholder="例：kintone">
+    </div>
+
+    <div class="field">
+      <label for="company-search">会社名・担当者名</label>
+      <input type="text" id="company-search" placeholder="フリーワード">
+    </div>
+
+    <button id="reset-btn">条件をリセット</button>
+  </aside>
+
+  <main>
+    <div class="summary-bar">
+      <span class="count" id="result-count">0</span>
+      <span class="count-label">件ヒット</span>
+      <select id="sort-select">
+        <option value="">並び順：指定なし</option>
+        <option value="date_desc">投稿日が新しい順</option>
+        <option value="date_asc">投稿日が古い順</option>
+        <option value="size_desc">従業員規模が大きい順</option>
+        <option value="size_asc">従業員規模が小さい順</option>
+      </select>
+      <button id="check-dup-btn" title="現在のデータ全体に含まれる重複件数を確認します">重複企業判定</button>
+      <span id="dup-check-result"></span>
+      <button id="csv-btn" style="margin-left:auto;">CSVダウンロード</button>
+    </div>
+
+    <div id="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>会社名</th>
+            <th>業種</th>
+            <th>部署</th>
+            <th>役職</th>
+            <th>担当者</th>
+            <th>従業員規模</th>
+            <th>製品 / カテゴリー</th>
+            <th>投稿日/記事公開日</th>
+            <th>出典元</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+      <div class="empty-state" id="empty-state" style="display:none;">条件に一致するデータがありません</div>
+    </div>
+
+    <div class="pager">
+      <button id="prev-btn">← 前へ</button>
+      <span id="page-info">1 / 1</span>
+      <button id="next-btn">次へ →</button>
+    </div>
+  </main>
+</div>
+
+<script>
+const PAGE_SIZE = 50;
+let ALL = [];
+let filtered = [];
+let page = 1;
+let sortKey = null;
+let sortDir = 1; // 1=asc, -1=desc
+
+const SIZE_ORDER = {
+  '20人未満': 1,
+  '20-50人未満': 2,
+  '50-100人未満': 3,
+  '100-300人未満': 4,
+  '300-1000人未満': 5,
+  '1000人以上': 6,
+};
+
+const deptInput = document.getElementById('dept-search');
+const largeSelect = document.getElementById('large-select');
+const mediumSelect = document.getElementById('medium-select');
+const productInput = document.getElementById('product-search');
+const companyInput = document.getElementById('company-search');
+const resetBtn = document.getElementById('reset-btn');
+const tbody = document.getElementById('table-body');
+const emptyState = document.getElementById('empty-state');
+const resultCount = document.getElementById('result-count');
+const pageInfo = document.getElementById('page-info');
+const prevBtn = document.getElementById('prev-btn');
+const nextBtn = document.getElementById('next-btn');
+const headerSub = document.getElementById('header-sub');
+
+fetch('keyman_data.json')
+  .then(r => r.json())
+  .then(data => {
+    ALL = data;
+    headerSub.textContent = `${ALL.length.toLocaleString()}件のキーマンデータを検索できます`;
+    buildLargeOptions();
+    applyFilters();
+  })
+  .catch(err => {
+    headerSub.textContent = 'データの読み込みに失敗しました（keyman_data.jsonが同じフォルダにあるか確認してください）';
+  });
+
+function buildLargeOptions(){
+  const larges = [...new Set(ALL.map(d => d.large).filter(Boolean))].sort();
+  largeSelect.innerHTML = '<option value="">すべて</option>' +
+    larges.map(l => `<option value="${escapeAttr(l)}">${escapeHtml(l)}</option>`).join('');
+}
+
+function buildMediumOptions(){
+  const selectedLarge = largeSelect.value;
+  const pool = selectedLarge ? ALL.filter(d => d.large === selectedLarge) : ALL;
+  const mediums = [...new Set(pool.map(d => d.medium).filter(Boolean))].sort();
+  mediumSelect.innerHTML = '<option value="">すべて</option>' +
+    mediums.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join('');
+}
+
+function applyFilters(){
+  const deptKw = deptInput.value.trim();
+  const large = largeSelect.value;
+  const medium = mediumSelect.value;
+  const productKw = productInput.value.trim().toLowerCase();
+  const companyKw = companyInput.value.trim().toLowerCase();
+
+  filtered = ALL.filter(d => {
+    if (deptKw && !(d.dept || '').includes(deptKw)) return false;
+    if (large && d.large !== large) return false;
+    if (medium && d.medium !== medium) return false;
+    if (productKw && !(d.product || '').toLowerCase().includes(productKw)) return false;
+    if (companyKw){
+      const hay = ((d.company||'') + ' ' + (d.name||'')).toLowerCase();
+      if (!hay.includes(companyKw)) return false;
+    }
+    return true;
+  });
+
+  page = 1;
+  render();
+}
+
+function render(){
+  if (sortKey){
+    filtered = [...filtered].sort((a, b) => {
+      let av, bv;
+      if (sortKey === 'size'){
+        av = SIZE_ORDER[a.size] ?? 0;
+        bv = SIZE_ORDER[b.size] ?? 0;
+      } else if (sortKey === 'date'){
+        av = a.date || '';
+        bv = b.date || '';
+      }
+      if (av < bv) return -1 * sortDir;
+      if (av > bv) return 1 * sortDir;
+      return 0;
+    });
+  }
+
+  resultCount.textContent = filtered.length.toLocaleString();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  page = Math.min(page, totalPages);
+  pageInfo.textContent = `${page} / ${totalPages}`;
+  prevBtn.disabled = page <= 1;
+  nextBtn.disabled = page >= totalPages;
+
+  const start = (page - 1) * PAGE_SIZE;
+  const pageRows = filtered.slice(start, start + PAGE_SIZE);
+
+  if (pageRows.length === 0){
+    tbody.innerHTML = '';
+    emptyState.style.display = 'block';
+    return;
+  }
+  emptyState.style.display = 'none';
+
+  tbody.innerHTML = pageRows.map(d => `
+    <tr>
+      <td class="company-name">${escapeHtml(d.company || '—')}</td>
+      <td>${escapeHtml(d.industry || '—')}</td>
+      <td>${d.dept ? `<span class="tag">${escapeHtml(d.dept)}</span>` : '—'}</td>
+      <td>${escapeHtml(d.title || '—')}</td>
+      <td>${escapeHtml(d.name || '—')}</td>
+      <td>${escapeHtml(d.size || '—')}</td>
+      <td>${escapeHtml(d.product || '—')}${(d.large || d.medium) ? `<div class="cat-path">${escapeHtml([d.large, d.medium].filter(Boolean).join(' > '))}</div>` : ''}</td>
+      <td>${escapeHtml(d.date || '—')}</td>
+      <td>${d.source ? `<span class="tag">${escapeHtml(d.source)}</span>` : '—'}</td>
+    </tr>
+  `).join('');
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s){ return escapeHtml(s); }
+
+deptInput.addEventListener('input', debounce(applyFilters, 150));
+productInput.addEventListener('input', debounce(applyFilters, 150));
+companyInput.addEventListener('input', debounce(applyFilters, 150));
+largeSelect.addEventListener('change', () => { buildMediumOptions(); applyFilters(); });
+mediumSelect.addEventListener('change', applyFilters);
+prevBtn.addEventListener('click', () => { page--; render(); });
+nextBtn.addEventListener('click', () => { page++; render(); });
+resetBtn.addEventListener('click', () => {
+  deptInput.value = '';
+  productInput.value = '';
+  companyInput.value = '';
+  largeSelect.value = '';
+  buildMediumOptions();
+  mediumSelect.value = '';
+  document.getElementById('sort-select').value = '';
+  sortKey = null;
+  sortDir = 1;
+  applyFilters();
+});
+
+function debounce(fn, ms){
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+document.getElementById('sort-select').addEventListener('change', (e) => {
+  const val = e.target.value;
+  if (!val){
+    sortKey = null;
+    sortDir = 1;
+  } else {
+    const [key, dir] = val.split('_');
+    sortKey = key;
+    sortDir = dir === 'desc' ? -1 : 1;
+  }
+  render();
+});
+
+document.getElementById('check-dup-btn').addEventListener('click', () => {
+  const seen = new Set();
+  let dupCount = 0;
+  ALL.forEach(d => {
+    const sig = [d.company, d.name, d.dept, d.title, d.product, d.date].join('|||');
+    if (seen.has(sig)) {
+      dupCount++;
+    } else {
+      seen.add(sig);
+    }
+  });
+  const uniqueCount = ALL.length - dupCount;
+  const resultEl = document.getElementById('dup-check-result');
+  if (dupCount === 0) {
+    resultEl.textContent = `重複なし（全${ALL.length.toLocaleString()}件）`;
+  } else {
+    resultEl.textContent = `重複 ${dupCount.toLocaleString()}件見つかりました（${ALL.length.toLocaleString()}件 → 除去後 ${uniqueCount.toLocaleString()}件）`;
+  }
+});
+
+document.getElementById('csv-btn').addEventListener('click', () => {
+  const headers = ['会社名','業種','部署','役職','担当者','従業員規模','製品','大項目','中項目','投稿日/記事公開日','出典記事URL','出典元'];
+  const csvRows = [headers.join(',')];
+  filtered.forEach(d => {
+    const row = [d.company, d.industry, d.dept, d.title, d.name, d.size, d.product, d.large, d.medium, d.date, d.url, d.source]
+      .map(v => `"${String(v || '').replace(/"/g, '""')}"`);
+    csvRows.push(row.join(','));
+  });
+  const csvContent = '\uFEFF' + csvRows.join('\r\n'); // BOM付きでExcelの文字化けを防ぐ
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `keyman_search_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+buildMediumOptions();
+</script>
+
+</body>
+</html>
