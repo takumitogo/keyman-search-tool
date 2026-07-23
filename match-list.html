@@ -142,6 +142,7 @@
     <h2><span class="num">3</span>出力を開始する列を選択</h2>
     <p class="desc">
       「担当者名・部署・役職・利用製品・出典記事URL・投稿日」の6列が、選んだ列から右方向に追加されます。<br>
+      1社で複数人ヒットした場合は行を増やさず、<strong>2人目・3人目…の情報を右側にさらに6列ずつ追加</strong>します（1社1行を維持するため、元のリストへのコピー&amp;ペーストがそのまま行えます）。<br>
       既存データが入っている列は選べません（上書き事故を防ぐため）。何も選ばなければ、自動的に空いている列から追加されます。
     </p>
     <div class="field-row">
@@ -157,7 +158,7 @@
   <div class="step disabled" id="step4">
     <h2><span class="num">4</span>照合を実行</h2>
     <p class="desc">
-      1社で複数人ヒットした場合、その人数分だけ行が増えます（元のリストの他の列はそのままコピーされます）。<br>
+      1社で複数人ヒットした場合も行は増やさず、右方向に列を追加して1社1行を維持します。<br>
       会社名は表記ゆれ（スペース・全角半角）を吸収した上で完全一致のみ照合します。部分一致はしません。
     </p>
     <button id="run-btn" disabled>照合してCSVを作成</button>
@@ -183,6 +184,26 @@ let uploadedRows = [];
 let uploadedHeaders = [];
 
 const OUTPUT_LABELS = ['担当者名', '部署', '役職', '利用製品', '出典記事URL', '投稿日'];
+
+// アップロードされた会社名リストの中で、最も多くヒットした人数を調べる
+// （これに合わせて「2人目、3人目…」の列ブロック数を決める）
+function computeMaxHits(companyIdx){
+  let max = 1;
+  uploadedRows.forEach(row => {
+    const key = normalizeCompany(row[companyIdx] || '');
+    const hits = KEYMAN_INDEX[key] || [];
+    if (hits.length > max) max = hits.length;
+  });
+  return max;
+}
+
+function buildOutputHeaderLabels(maxHits){
+  const labels = [];
+  for (let p = 1; p <= maxHits; p++){
+    OUTPUT_LABELS.forEach(base => labels.push(`${base}${maxHits > 1 ? p : ''}`));
+  }
+  return labels;
+}
 
 function normalizeCompany(s){
   return String(s || '')
@@ -306,7 +327,7 @@ function setupStep2(){
   if (guessIdx >= 0) sel.value = guessIdx;
 
   renderInputPreview();
-  sel.addEventListener('change', renderInputPreview);
+  sel.addEventListener('change', () => { renderInputPreview(); setupStep3(); });
 
   document.getElementById('run-btn').disabled = false;
 }
@@ -334,6 +355,10 @@ function setupStep3(){
   const existingColCount = uploadedHeaders.length;
   const autoStartIdx = existingColCount; // 既存データの直後（＝空いている最初の列）
 
+  const companyIdx = parseInt(document.getElementById('company-col-select').value, 10);
+  const maxHits = computeMaxHits(companyIdx);
+  const totalNewCols = maxHits * OUTPUT_LABELS.length;
+
   // 選べるのは「既存データの直後」から先のみ（上書き防止のため、それより手前は選択肢に出さない）
   const options = [];
   for (let i = autoStartIdx; i < autoStartIdx + 10; i++){
@@ -344,7 +369,10 @@ function setupStep3(){
   sel.value = autoStartIdx;
 
   document.getElementById('auto-note').textContent =
-    `現在のリストは ${colLetter(0)}〜${colLetter(existingColCount - 1)} 列（${existingColCount}列）まで使用中です。既存データより手前の列は選択肢に出しません。`;
+    `現在のリストは ${colLetter(0)}〜${colLetter(existingColCount - 1)} 列（${existingColCount}列）まで使用中です。既存データより手前の列は選択肢に出しません。`
+    + (maxHits > 1
+        ? ` このリストは最大${maxHits}人ヒットする会社があるため、${totalNewCols}列（${OUTPUT_LABELS.length}列 × ${maxHits}人）が追加されます。`
+        : ` 1社あたり最大1人のヒットなので、${OUTPUT_LABELS.length}列が追加されます。`);
 
   renderOutputPreview();
   sel.addEventListener('change', renderOutputPreview);
@@ -355,14 +383,17 @@ function renderOutputPreview(){
   const table = document.getElementById('output-preview-table');
   const startIdx = parseInt(document.getElementById('start-col-select').value, 10);
   const existingColCount = uploadedHeaders.length;
+  const companyIdx = parseInt(document.getElementById('company-col-select').value, 10);
+  const maxHits = computeMaxHits(companyIdx);
+  const labels = buildOutputHeaderLabels(maxHits);
 
-  const totalCols = Math.max(startIdx + OUTPUT_LABELS.length, existingColCount);
+  const totalCols = Math.max(startIdx + labels.length, existingColCount);
   let headerCells = '';
   for (let i = 0; i < totalCols; i++){
     if (i < existingColCount){
       headerCells += `<th>${colLetter(i)}: ${escapeHtml(uploadedHeaders[i] || '')}</th>`;
-    } else if (i >= startIdx && i < startIdx + OUTPUT_LABELS.length){
-      headerCells += `<th class="new-col">${colLetter(i)}: ${OUTPUT_LABELS[i - startIdx]}（新規）</th>`;
+    } else if (i >= startIdx && i < startIdx + labels.length){
+      headerCells += `<th class="new-col">${colLetter(i)}: ${labels[i - startIdx]}（新規）</th>`;
     } else {
       headerCells += `<th>${colLetter(i)}: （空欄）</th>`;
     }
@@ -380,11 +411,13 @@ document.getElementById('run-btn').addEventListener('click', () => {
   const companyIdx = parseInt(document.getElementById('company-col-select').value, 10);
   const startIdx = parseInt(document.getElementById('start-col-select').value, 10);
   const existingColCount = uploadedHeaders.length;
+  const maxHits = computeMaxHits(companyIdx);
+  const labels = buildOutputHeaderLabels(maxHits);
 
-  // 出力用のヘッダーを組み立てる（既存列 + 空白パディング + 新規6列 + ヒット件数）
+  // 出力用のヘッダーを組み立てる（既存列 + 空白パディング + 新規列(人数分) + ヒット件数）
   resultHeaders = [...uploadedHeaders];
   while (resultHeaders.length < startIdx) resultHeaders.push(`(${colLetter(resultHeaders.length)}列)`);
-  resultHeaders.push(...OUTPUT_LABELS, 'ヒット件数');
+  resultHeaders.push(...labels, 'ヒット件数');
 
   resultRows = [];
   let matchedCompanies = 0;
@@ -400,25 +433,28 @@ document.getElementById('run-btn').addEventListener('click', () => {
     const baseRow = [];
     for (let i = 0; i < startIdx; i++) baseRow.push(row[i] || '');
 
-    if (hits.length === 0){
-      resultRows.push([...baseRow, '', '', '', '', '', '', 0]);
-      return;
+    // 1社1行を維持したまま、ヒットした人数分だけ右方向に6列ずつ追加する
+    const peopleCells = [];
+    for (let p = 0; p < maxHits; p++){
+      const h = hits[p];
+      if (h){
+        peopleCells.push(h.name || '', h.dept || '', h.title || '', h.product || '', h.url || '', h.date || '');
+      } else {
+        peopleCells.push('', '', '', '', '', '');
+      }
     }
 
-    matchedCompanies++;
-    hits.forEach(h => {
-      matchedPeople++;
-      resultRows.push([
-        ...baseRow,
-        h.name || '', h.dept || '', h.title || '', h.product || '', h.url || '', h.date || '',
-        hits.length,
-      ]);
-    });
+    if (hits.length > 0){
+      matchedCompanies++;
+      matchedPeople += hits.length;
+    }
+
+    resultRows.push([...baseRow, ...peopleCells, hits.length]);
   });
 
   document.getElementById('result-box').style.display = 'block';
   document.getElementById('result-summary').textContent = `${matchedCompanies.toLocaleString()} / ${totalCompanies.toLocaleString()} 社ヒット`;
-  document.getElementById('result-detail').textContent = `担当者情報：合計 ${matchedPeople.toLocaleString()} 件見つかりました`;
+  document.getElementById('result-detail').textContent = `担当者情報：合計 ${matchedPeople.toLocaleString()} 件見つかりました（最大${maxHits}人分の列を追加、1社1行を維持）`;
 });
 
 document.getElementById('download-btn').addEventListener('click', () => {
